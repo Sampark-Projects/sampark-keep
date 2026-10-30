@@ -73,7 +73,8 @@ export default function SignInForm({
         } else {
           signIn("auth0", { callbackUrl: "/" });
         }
-      } else if (providers.keycloak) {
+      } else if (providers.keycloak && !providers.credentials) {
+        // when the credentials form is available too, Keycloak is offered as a button below it
         console.log("Signing in with keycloak provider");
         signIn("keycloak", { callbackUrl: "/" });
       } else if (providers.okta) {
@@ -150,10 +151,16 @@ export default function SignInForm({
 
       // Add a small delay before redirect to ensure state update
       await new Promise((resolve) => setTimeout(resolve, 100));
-      router.replace("/incidents");
 
-      // Disable form interactions during redirect
-      await revalidateAfterAuth();
+      // Revalidation is best-effort: the user is already authenticated, so a
+      // failure here (e.g. while the dashboard is still compiling) must not show
+      // up as a login error
+      try {
+        await revalidateAfterAuth();
+      } catch (revalidateError) {
+        console.warn("Failed to revalidate after auth", revalidateError);
+      }
+      router.replace("/incidents");
     } catch (error) {
       setError("root", {
         message: (error as Error)?.message || "An unexpected error occurred",
@@ -245,6 +252,19 @@ export default function SignInForm({
               ? "Redirecting..."
               : "Sign in"}
           </Button>
+          {providers.keycloak && (
+            <Button
+              type="button"
+              size="lg"
+              color="orange"
+              variant="secondary"
+              className="w-full"
+              disabled={isSubmitting || isRedirecting}
+              onClick={() => signIn("keycloak", { callbackUrl: "/" })}
+            >
+              Sign in with Keycloak
+            </Button>
+          )}
         </form>
       </>
     );

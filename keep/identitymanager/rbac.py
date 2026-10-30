@@ -23,6 +23,7 @@ class Roles(enum.Enum):
     NOC = "noc"
     WEBHOOK = "webhook"
     WORKFLOW_RUNNER = "workflowrunner"
+    READ_ONLY = "readonly"
 
 
 class Role:
@@ -76,6 +77,12 @@ class WorkflowRunner(Role):
     DESCRIPTION = "Run workflows using API keys"
 
 
+# ReadOnly can view everything but can't change or execute anything
+class ReadOnly(Role):
+    SCOPES = ["read:*"]
+    DESCRIPTION = "read permissions only"
+
+
 def get_role_by_role_name(role_name: str) -> list[str]:
     if role_name == Roles.ADMIN.value:
         return Admin
@@ -85,6 +92,8 @@ def get_role_by_role_name(role_name: str) -> list[str]:
         return Webhook
     elif role_name == Roles.WORKFLOW_RUNNER.value:
         return WorkflowRunner
+    elif role_name == Roles.READ_ONLY.value:
+        return ReadOnly
     else:
         raise HTTPException(
             status_code=403,

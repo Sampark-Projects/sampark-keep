@@ -57,7 +57,8 @@ async function refreshAccessToken(token: any) {
   let clientSecret = "";
   let refreshTokenUrl = "";
 
-  switch (authType) {
+  // "Sign in with Keycloak" on top of DB auth marks its token with provider=keycloak
+  switch (token.provider === "keycloak" ? AuthType.KEYCLOAK : authType) {
     case AuthType.KEYCLOAK: {
       issuerUrl = process.env.KEYCLOAK_ISSUER || "";
       clientId = process.env.KEYCLOAK_ID || "";
@@ -294,12 +295,32 @@ if (isDebug) {
   console.log("Auth debug mode enabled");
 }
 
+// Optional "Sign in with Keycloak" button next to the DB username/password form.
+// Keycloak users get the read-only role (see jwt callback and DbAuthVerifier).
+export const keycloakSignInEnabled =
+  authType === AuthType.DB &&
+  !!runtimeEnv("KEYCLOAK_ID") &&
+  !!runtimeEnv("KEYCLOAK_SECRET") &&
+  !!runtimeEnv("KEYCLOAK_ISSUER");
+
 export const config = {
   debug: isDebug,
   trustHost: true,
-  providers:
-    baseProviderConfigs[authType as keyof typeof baseProviderConfigs] ||
-    baseProviderConfigs[AuthType.NOAUTH],
+  providers: [
+    ...(baseProviderConfigs[authType as keyof typeof baseProviderConfigs] ||
+      baseProviderConfigs[AuthType.NOAUTH]),
+    ...(keycloakSignInEnabled
+      ? [
+          Keycloak({
+            clientId: runtimeEnv("KEYCLOAK_ID")!,
+            clientSecret: runtimeEnv("KEYCLOAK_SECRET")!,
+            issuer: runtimeEnv("KEYCLOAK_ISSUER")!,
+            authorization: { params: { scope: "openid email profile" } },
+            checks: ["pkce"],
+          }),
+        ]
+      : []),
+  ],
   pages: {
     signIn: "/signin",
     error: "/error",
@@ -360,6 +381,11 @@ export const config = {
           // TODO: remove this once we have a proper way to get the tenant id
           tenantId = (profile as any).keep_tenant_id || "keep";
           role = (profile as any).keep_role;
+          accessToken = account.access_token;
+        } else if (keycloakSignInEnabled && account.provider === "keycloak") {
+          // "Sign in with Keycloak" next to DB auth: single tenant, read-only access
+          tenantId = "keep";
+          role = "readonly";
           accessToken = account.access_token;
         } else if (authType === AuthType.OKTA) {
           // Extract tenant and role from Okta token
@@ -461,13 +487,18 @@ export const config = {
         }
 
         // Refresh token logic for Keycloak, Okta and OneLogin
-        if (authType === AuthType.KEYCLOAK || authType === AuthType.OKTA || authType === AuthType.ONELOGIN) {
+        const isKeycloakSignIn =
+          keycloakSignInEnabled && account.provider === "keycloak";
+        if (isKeycloakSignIn) {
+          token.provider = "keycloak";
+        }
+        if (authType === AuthType.KEYCLOAK || authType === AuthType.OKTA || authType === AuthType.ONELOGIN || isKeycloakSignIn) {
           token.refreshToken = account.refresh_token;
           token.accessTokenExpires =
             Date.now() + (account.expires_in as number) * 1000;
         }
       } else if (
-        (authType === AuthType.KEYCLOAK || authType === AuthType.OKTA || authType === AuthType.ONELOGIN) &&
+        (authType === AuthType.KEYCLOAK || authType === AuthType.OKTA || authType === AuthType.ONELOGIN || token.provider === "keycloak") &&
         token.refreshToken &&
         token.accessTokenExpires &&
         typeof token.accessTokenExpires === "number" &&
