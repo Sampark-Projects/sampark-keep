@@ -46,6 +46,11 @@ export function Drawer({
             {description}
           </DrawerDescription>
         </DrawerHeader> */}
+        {/* Radix requires a title/description for accessibility; keep them visually hidden */}
+        <DrawerTitle className="sr-only">{title ?? "Drawer"}</DrawerTitle>
+        <DrawerDescription className="sr-only">
+          {description ?? title ?? "Drawer"}
+        </DrawerDescription>
         <DrawerBody>{children}</DrawerBody>
         {/* <DrawerFooter className="mt-6">
           <DrawerClose asChild>

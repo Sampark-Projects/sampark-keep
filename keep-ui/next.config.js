@@ -19,9 +19,8 @@ const turbopackAliases =
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
-  devIndicators: {
-    position: "bottom-right",
-  },
+  // hide the Next.js dev "N" badge
+  devIndicators: false,
   experimental: {
     turbo: {
       resolveAlias: turbopackAliases,
